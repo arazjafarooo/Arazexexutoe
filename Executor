@@ -1,0 +1,485 @@
+-- Services with error handling
+local success, Players = pcall(game.GetService, game, "Players")
+local success, TweenService = pcall(game.GetService, game, "TweenService")
+local success, RunService = pcall(game.GetService, game, "RunService")
+local success, UserInputService = pcall(game.GetService, game, "UserInputService")
+local success, Workspace = pcall(game.GetService, game, "Workspace")
+
+-- Verify client-side execution and essential services
+if not success or RunService:IsServer() or not Players or not TweenService or not RunService or not UserInputService or not Workspace then
+    return -- Exit silently if conditions aren't met
+end
+
+local player = Players.LocalPlayer
+if not player then return end
+
+-- Create GUI
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "ARAZExecutor"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui", 10) or nil -- Timeout to avoid hang
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0.4, 0, 0.6, 0) -- Slightly taller for more content
+mainFrame.Position = UDim2.new(-0.5, 0, 0.2, 0) -- Start off-screen
+mainFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+mainFrame.BorderSizePixel = 0
+mainFrame.Parent = screenGui or nil
+
+-- Title label
+local titleLabel = Instance.new("TextLabel")
+titleLabel.Size = UDim2.new(1, 0, 0.1, 0)
+titleLabel.Position = UDim2.new(0, 0, 0, 0)
+titleLabel.BackgroundTransparency = 1
+titleLabel.Text = "ARAZ EXECUTOR v1.2"
+titleLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+titleLabel.Font = Enum.Font.SourceSansBold
+titleLabel.TextSize = 20
+titleLabel.Parent = mainFrame
+
+-- Background image
+local imageLabel = Instance.new("ImageLabel")
+imageLabel.Size = UDim2.new(1, 0, 1, 0)
+imageLabel.Position = UDim2.new(0, 0, 0, 0)
+imageLabel.Image = "rbxassetid://8595285721" -- Replace with your preferred image
+imageLabel.BackgroundTransparency = 1
+imageLabel.ZIndex = 0
+imageLabel.Parent = mainFrame
+
+-- TextBox for code input
+local textBox = Instance.new("TextBox")
+textBox.Size = UDim2.new(0.9, 0, 0.4, 0)
+textBox.Position = UDim2.new(0.05, 0, 0.1, 0)
+textBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+textBox.PlaceholderText = 'Enter: Lua script, require(assetId).load("username"), giantHand <username>, speed <value>, jump <value>, fly, kick, ban, ;kick <user>, ;ban <user>, ;fly <user>...'
+textBox.Text = ""
+textBox.MultiLine = true
+textBox.ClearTextOnFocus = false
+textBox.Font = Enum.Font.SourceSans
+textBox.TextSize = 16
+textBox.TextWrapped = true
+textBox.Parent = mainFrame
+
+-- Execute button
+local executeButton = Instance.new("TextButton")
+executeButton.Size = UDim2.new(0.28, 0, 0.1, 0)
+executeButton.Position = UDim2.new(0.05, 0, 0.55, 0)
+executeButton.Text = "Execute"
+executeButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+executeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+executeButton.Font = Enum.Font.SourceSansBold
+executeButton.TextSize = 18
+executeButton.Parent = mainFrame
+
+-- Clear button
+local clearButton = Instance.new("TextButton")
+clearButton.Size = UDim2.new(0.28, 0, 0.1, 0)
+clearButton.Position = UDim2.new(0.36, 0, 0.55, 0)
+clearButton.Text = "Clear"
+clearButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+clearButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+clearButton.Font = Enum.Font.SourceSansBold
+clearButton.TextSize = 18
+clearButton.Parent = mainFrame
+
+-- Toggle Hand button
+local toggleHandButton = Instance.new("TextButton")
+toggleHandButton.Size = UDim2.new(0.28, 0, 0.1, 0)
+toggleHandButton.Position = UDim2.new(0.67, 0, 0.55, 0)
+toggleHandButton.Text = "Toggle Hand"
+toggleHandButton.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
+toggleHandButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+toggleHandButton.Font = Enum.Font.SourceSansBold
+toggleHandButton.TextSize = 18
+toggleHandButton.Parent = mainFrame
+
+-- Hand Color button
+local colorButton = Instance.new("TextButton")
+colorButton.Size = UDim2.new(0.28, 0, 0.1, 0)
+colorButton.Position = UDim2.new(0.05, 0, 0.7, 0)
+colorButton.Text = "Change Hand Color"
+colorButton.BackgroundColor3 = Color3.fromRGB(255, 165, 0) -- Orange
+colorButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+colorButton.Font = Enum.Font.SourceSansBold
+colorButton.TextSize = 16
+colorButton.Parent = mainFrame
+
+-- Output TextLabel
+local outputLabel = Instance.new("TextLabel")
+outputLabel.Size = UDim2.new(0.9, 0, 0.1, 0)
+outputLabel.Position = UDim2.new(0.05, 0, 0.85, 0)
+outputLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+outputLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+outputLabel.Text = "Output: Ready"
+outputLabel.Font = Enum.Font.SourceSans
+outputLabel.TextSize = 14
+outputLabel.TextWrapped = true
+outputLabel.Parent = mainFrame
+
+-- Sliding animation
+local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out)
+local tween = TweenService:Create(mainFrame, tweenInfo, {Position = UDim2.new(0.3, 0, 0.2, 0)})
+tween:Play()
+
+-- Dragging functionality
+local dragging, dragStart, startPos = false, nil, nil
+mainFrame.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = mainFrame.Position
+    end
+end)
+
+mainFrame.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+UserInputService.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = false
+    end
+end)
+
+-- Giant Hand Implementation (client-side, R6/R15 compatible)
+local giantHandToggles = {}
+local handColors = {BrickColor.new("Really red"), BrickColor.new("Bright blue"), BrickColor.new("Bright yellow")}
+local currentColorIndex = 1
+local function setupGiantHand(targetPlayer)
+    local char = targetPlayer.Character
+    if not char then return end
+    local humanoid = char:FindFirstChild("Humanoid")
+    if not humanoid then return end
+    local torso = char:FindFirstChild("Torso") or char:FindFirstChild("UpperTorso")
+    if not torso then return end
+
+    local handParts = {}
+    local palm = Instance.new("Part")
+    palm.Size = Vector3.new(5, 3, 1)
+    palm.BrickColor = handColors[currentColorIndex]
+    palm.Anchored = false
+    palm.CanCollide = false
+    palm.Parent = Workspace
+    table.insert(handParts, palm)
+
+    for i = 1, 4 do
+        local finger = Instance.new("Part")
+        finger.Size = Vector3.new(1, 1, 2)
+        finger.BrickColor = handColors[currentColorIndex]
+        finger.Anchored = false
+        finger.CanCollide = false
+        finger.Parent = Workspace
+        table.insert(handParts, finger)
+    end
+
+    local toggle = giantHandToggles[targetPlayer] or {toggle = false, handParts = {}, connections = {}}
+    giantHandToggles[targetPlayer] = toggle
+    toggle.handParts = handParts
+
+    local function enableHand()
+        if toggle.toggle or not char or not char.Parent then return end
+        toggle.toggle = true
+
+        humanoid.WalkSpeed = 16
+        humanoid.Sit = false
+        humanoid.HipHeight = 0
+
+        local baseCFrame = torso.CFrame * CFrame.new(0, 0, -3)
+        for i, part in ipairs(handParts) do
+            if i == 1 then
+                part.Size = Vector3.new(5, 3, 1)
+                part.CFrame = baseCFrame
+            else
+                part.Size = Vector3.new(1, 1, 2)
+                part.CFrame = baseCFrame * CFrame.new(math.sin(i * math.pi / 5), -2.5 - (i-1)*0.3, -math.cos(i * math.pi / 5))
+            end
+            local weld = Instance.new("WeldConstraint")
+            weld.Part0 = torso
+            weld.Part1 = part
+            weld.C0 = torso.CFrame:Inverse() * part.CFrame
+            weld.Parent = part
+        end
+
+        toggle.connections.heartbeat = RunService.Heartbeat:Connect(function()
+            if not toggle.toggle or not char or not char.Parent then return end
+            for i = 2, #handParts do
+                local part = handParts[i]
+                part.CFrame = part.CFrame * CFrame.Angles(0, math.rad(5 * math.sin(tick() * 2)), 0)
+            end
+        end)
+    end
+
+    local function disableHand()
+        if not toggle.toggle or not char or not char.Parent then return end
+        toggle.toggle = false
+
+        for _, part in ipairs(toggle.handParts) do
+            if part and part.Parent then part:Destroy() end
+        end
+        toggle.handParts = {}
+
+        for _, conn in pairs(toggle.connections) do
+            if conn and typeof(conn) == "RBXScriptConnection" then conn:Disconnect() end
+        end
+        toggle.connections = {}
+    end
+
+    toggle.connections.died = humanoid.Died:Connect(disableHand)
+
+    if not RunService:IsServer() then
+        toggleHandButton.MouseButton1Click:Connect(function()
+            if toggle.toggle then
+                disableHand()
+                outputLabel.Text = "Output: Giant Hand OFF"
+            else
+                enableHand()
+                outputLabel.Text = "Output: Giant Hand ON"
+            end
+        end)
+    end
+
+    if toggle.toggle then
+        enableHand()
+    end
+end
+
+-- Helper to apply Giant Hand
+local function setupGiantHandForTarget(targetName)
+    local target = Players:FindFirstChild(targetName) or (targetName == player.Name and player)
+    if target and target.Character then
+        setupGiantHand(target)
+        return true
+    end
+    return false
+end
+
+-- Fly Implementation (client-side)
+local flyToggle = false
+local flyVelocity = nil
+local flyGyro = nil
+local function toggleFly(state, targetPlayer)
+    local char = (targetPlayer or player).Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local humanoid = char:FindFirstChild("Humanoid")
+    if not humanoid then return end
+
+    if state and not flyToggle then
+        flyToggle = true
+        local root = char.HumanoidRootPart
+        flyVelocity = Instance.new("BodyVelocity")
+        flyVelocity.Velocity = Vector3.new(0, 0, 0)
+        flyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+        flyVelocity.Parent = root
+
+        flyGyro = Instance.new("BodyGyro")
+        flyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+        flyGyro.P = 10000
+        flyGyro.D = 1000
+        flyGyro.Parent = root
+
+        humanoid.PlatformStand = true
+
+        UserInputService.InputBegan:Connect(function(input, gameProcessed)
+            if gameProcessed then return end
+            if not flyToggle then return end
+            local moveDirection = Vector3.new(0, 0, 0)
+            if input.KeyCode == Enum.KeyCode.W then moveDirection = moveDirection + Vector3.new(0, 0, -1)
+            elseif input.KeyCode == Enum.KeyCode.S then moveDirection = moveDirection + Vector3.new(0, 0, 1)
+            elseif input.KeyCode == Enum.KeyCode.A then moveDirection = moveDirection + Vector3.new(-1, 0, 0)
+            elseif input.KeyCode == Enum.KeyCode.D then moveDirection = moveDirection + Vector3.new(1, 0, 0)
+            elseif input.KeyCode == Enum.KeyCode.Space then moveDirection = moveDirection + Vector3.new(0, 1, 0)
+            elseif input.KeyCode == Enum.KeyCode.LeftShift then moveDirection = moveDirection + Vector3.new(0, -1, 0) end
+            if moveDirection.Magnitude > 0 then
+                moveDirection = moveDirection.Unit * 50 -- Adjust speed here
+                flyVelocity.Velocity = root.CFrame:VectorToWorldSpace(moveDirection)
+                flyGyro.CFrame = root.CFrame
+            end
+        end)
+
+        RunService.RenderStepped:Connect(function()
+            if flyToggle and root and flyGyro and flyVelocity then
+                flyGyro.CFrame = root.CFrame
+            end
+        end)
+    elseif not state and flyToggle then
+        flyToggle = false
+        if flyVelocity then flyVelocity:Destroy() end
+        if flyGyro then flyGyro:Destroy() end
+        humanoid.PlatformStand = false
+    end
+end
+
+-- Kick/Ban Implementation (local effects)
+local function applyKick(targetPlayer)
+    local char = targetPlayer.Character
+    if char and char:FindFirstChild("HumanoidRootPart") then
+        char.HumanoidRootPart.CFrame = CFrame.new(0, -1000, 0) -- Drop below map
+        task.wait(0.5)
+        player:LoadCharacter() -- Reset character
+    end
+end
+
+local function applyBan(targetPlayer)
+    if screenGui then screenGui:Destroy() end
+    outputLabel.Text = "Output: Banned (GUI Disabled)"
+end
+
+-- Safe execution (no error messages, enhanced commands)
+local function executeCode(code)
+    if not textBox or not outputLabel then return end
+
+    if code == "" then
+        setupGiantHandForTarget(player.Name)
+        outputLabel.Text = "Output: Giant Hand Ready"
+        return
+    end
+
+    -- Giant Hand command
+    if code:lower():match("^gianthand%s+(.+)$") then
+        local target = code:match("^gianthand%s+(.+)$")
+        setupGiantHandForTarget(target)
+        outputLabel.Text = "Output: Giant Hand Ready"
+        return
+    end
+
+    -- Speed command
+    if code:lower():match("^speed%s+(%d+)$") then
+        local speed = tonumber(code:match("^speed%s+(%d+)$"))
+        if speed and player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.WalkSpeed = math.clamp(speed, 0, 100)
+        end
+        outputLabel.Text = "Output: Speed Set"
+        return
+    end
+
+    -- Jump command
+    if code:lower():match("^jump%s+(%d+)$") then
+        local jump = tonumber(code:match("^jump%s+(%d+)$"))
+        if jump and player.Character and player.Character:FindFirstChild("Humanoid") then
+            player.Character.Humanoid.JumpPower = math.clamp(jump, 0, 100)
+        end
+        outputLabel.Text = "Output: Jump Set"
+        return
+    end
+
+    -- Fly command
+    if code:lower():match("^fly$") then
+        toggleFly(not flyToggle)
+        outputLabel.Text = "Output: Fly " .. (flyToggle and "ON" or "OFF")
+        return
+    end
+
+    -- Kick command
+    if code:lower():match("^kick$") then
+        applyKick(player)
+        outputLabel.Text = "Output: Kicked"
+        return
+    end
+
+    -- Ban command
+    if code:lower():match("^ban$") then
+        applyBan(player)
+        return
+    end
+
+    -- ;kick user command
+    if code:lower():match("^;kick%s+(.+)$") then
+        local targetName = code:match("^;kick%s+(.+)$")
+        local target = Players:FindFirstChild(targetName) or (targetName == player.Name and player)
+        if target then applyKick(target) end
+        outputLabel.Text = "Output: Kick Applied"
+        return
+    end
+
+    -- ;ban user command
+    if code:lower():match("^;ban%s+(.+)$") then
+        local targetName = code:match("^;ban%s+(.+)$")
+        local target = Players:FindFirstChild(targetName) or (targetName == player.Name and player)
+        if target then applyBan(target) end
+        outputLabel.Text = "Output: Ban Applied"
+        return
+    end
+
+    -- ;fly user command
+    if code:lower():match("^;fly%s+(.+)$") then
+        local targetName = code:match("^;fly%s+(.+)$")
+        local target = Players:FindFirstChild(targetName) or (targetName == player.Name and player)
+        if target then toggleFly(not flyToggle, target) end
+        outputLabel.Text = "Output: Fly " .. (flyToggle and "ON" or "OFF") .. " for " .. (targetName or "self")
+        return
+    end
+
+    -- Require(assetId).load("username") safely
+    local requireLoadPattern = "^%s*require%((%d+)%)%.load%(%s*['\"]([^'\"]+)['\"]%s*%)%s*$"
+    local assetId, username = code:match(requireLoadPattern)
+    if assetId and username then
+        pcall(function()
+            local module = require(tonumber(assetId))
+            if module and type(module.load) == "function" then
+                local result = module.load(username)
+                if result and result.execute and type(result.execute) == "function" then
+                    result.execute()
+                end
+            end
+        end)
+        outputLabel.Text = "Output: Module Loaded"
+        return
+    end
+
+    -- Require(assetId) safely
+    local requirePattern = "^%s*require%((%d+)%)%s*$"
+    assetId = code:match(requirePattern)
+    if assetId then
+        pcall(function()
+            local module = require(tonumber(assetId))
+            if type(module) == "function" then
+                module()
+            end
+        end)
+        outputLabel.Text = "Output: Module Loaded"
+        return
+    end
+
+    -- Raw Lua script execution
+    pcall(function()
+        if code and code ~= "" then
+            local func = loadstring(code)
+            if func then func() end
+        end
+    end)
+
+    outputLabel.Text = "Output: Action Completed"
+end
+
+-- Bind buttons
+if not RunService:IsServer() then
+    executeButton.MouseButton1Click:Connect(function()
+        executeCode(textBox.Text)
+    end)
+
+    clearButton.MouseButton1Click:Connect(function()
+        if textBox then
+            textBox.Text = ""
+            outputLabel.Text = "Output: Cleared"
+        end
+    end)
+
+    toggleHandButton.MouseButton1Click:Connect(function()
+        setupGiantHandForTarget(player.Name)
+        outputLabel.Text = "Output: Giant Hand Toggled"
+    end)
+
+    colorButton.MouseButton1Click:Connect(function()
+        currentColorIndex = (currentColorIndex % #handColors) + 1
+        if giantHandToggles[player] and giantHandToggles[player].toggle then
+            for _, part in ipairs(giantHandToggles[player].handParts) do
+                part.BrickColor = handColors[currentColorIndex]
+            end
+        end
+        outputLabel.Text = "Output: Hand Color Changed to " .. handColors[currentColorIndex].Name
+    end)
+end
