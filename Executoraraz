@@ -1,0 +1,362 @@
+-- Services
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+
+-- Detect if running client-side or serverside
+local isServerSide = not RunService:IsClient()
+local player = isServerSide and nil or Players.LocalPlayer
+
+-- Create GUI (client-side only)
+local screenGui, mainFrame, textBox, executeButton, clearButton, outputLabel, toggleHandButton
+if not isServerSide then
+    local playerGui = player:WaitForChild("PlayerGui")
+    screenGui = Instance.new("ScreenGui")
+    screenGui.Name = "Tubers93Executor"
+    screenGui.ResetOnSpawn = false
+    screenGui.Parent = playerGui
+
+    -- Create the main frame
+    mainFrame = Instance.new("Frame")
+    mainFrame.Size = UDim2.new(0.4, 0, 0.5, 0)
+    mainFrame.Position = UDim2.new(-0.5, 0, 0.2, 0) -- Start off-screen
+    mainFrame.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    mainFrame.BorderSizePixel = 0
+    mainFrame.Parent = screenGui
+
+    -- Sliding animation
+    local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Quad, Enum.EasingDirection.Out, 0, false, 0)
+    local tween = TweenService:Create(mainFrame, tweenInfo, {Position = UDim2.new(0.3, 0, 0.2, 0)})
+    tween:Play()
+
+    -- Create the ImageLabel for the background
+    local imageLabel = Instance.new("ImageLabel")
+    imageLabel.Size = UDim2.new(1, 0, 1, 0)
+    imageLabel.Position = UDim2.new(0, 0, 0, 0)
+    imageLabel.Image = "rbxassetid://8595285721"
+    imageLabel.BackgroundTransparency = 1
+    imageLabel.ZIndex = 0
+    imageLabel.Parent = mainFrame
+
+    -- Create the TextBox for code input
+    textBox = Instance.new("TextBox")
+    textBox.Size = UDim2.new(0.9, 0, 0.5, 0)
+    textBox.Position = UDim2.new(0.05, 0, 0.1, 0)
+    textBox.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    textBox.TextColor3 = Color3.fromRGB(255, 255, 255)
+    textBox.PlaceholderText = "Enter Lua script, require(...), or giantHand <username/all>..."
+    textBox.Text = ""
+    textBox.MultiLine = true
+    textBox.ClearTextOnFocus = false
+    textBox.Font = Enum.Font.SourceSans
+    textBox.TextSize = 16
+    textBox.TextWrapped = true
+    textBox.Parent = mainFrame
+
+    -- Create the Execute button
+    executeButton = Instance.new("TextButton")
+    executeButton.Size = UDim2.new(0.28, 0, 0.1, 0)
+    executeButton.Position = UDim2.new(0.05, 0, 0.7, 0)
+    executeButton.Text = "Execute"
+    executeButton.BackgroundColor3 = Color3.fromRGB(0, 170, 255)
+    executeButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    executeButton.Font = Enum.Font.SourceSansBold
+    executeButton.TextSize = 18
+    executeButton.Parent = mainFrame
+
+    -- Create the Clear button
+    clearButton = Instance.new("TextButton")
+    clearButton.Size = UDim2.new(0.28, 0, 0.1, 0)
+    clearButton.Position = UDim2.new(0.36, 0, 0.7, 0)
+    clearButton.Text = "Clear"
+    clearButton.BackgroundColor3 = Color3.fromRGB(255, 50, 50)
+    clearButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    clearButton.Font = Enum.Font.SourceSansBold
+    clearButton.TextSize = 18
+    clearButton.Parent = mainFrame
+
+    -- Create the Toggle Hand button
+    toggleHandButton = Instance.new("TextButton")
+    toggleHandButton.Size = UDim2.new(0.28, 0, 0.1, 0)
+    toggleHandButton.Position = UDim2.new(0.67, 0, 0.7, 0)
+    toggleHandButton.Text = "Toggle Hand"
+    toggleHandButton.BackgroundColor3 = Color3.fromRGB(50, 255, 50)
+    toggleHandButton.TextColor3 = Color3.fromRGB(255, 255, 255)
+    toggleHandButton.Font = Enum.Font.SourceSansBold
+    toggleHandButton.TextSize = 18
+    toggleHandButton.Parent = mainFrame
+
+    -- Create the Output TextLabel
+    outputLabel = Instance.new("TextLabel")
+    outputLabel.Size = UDim2.new(0.9, 0, 0.1, 0)
+    outputLabel.Position = UDim2.new(0.05, 0, 0.85, 0)
+    outputLabel.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+    outputLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+    outputLabel.Text = "Output: Ready (Click Toggle Hand or type giantHand all)"
+    outputLabel.Font = Enum.Font.SourceSans
+    outputLabel.TextSize = 14
+    outputLabel.TextWrapped = true
+    outputLabel.Parent = mainFrame
+
+    -- Dragging functionality
+    local dragging, dragStart, startPos = false, nil, nil
+    mainFrame.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = true
+            dragStart = input.Position
+            startPos = mainFrame.Position
+        end
+    end)
+
+    mainFrame.InputChanged:Connect(function(input)
+        if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+            local delta = input.Position - dragStart
+            mainFrame.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+        end
+    end)
+
+    game:GetService("UserInputService").InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            dragging = false
+        end
+    end)
+end
+
+-- FE Giant Hand Implementation (c00lkidd-style troll, adapted for FE)
+local giantHandToggles = {}  -- Track toggles per player {toggle = false, connections = {}}
+local function setupGiantHand(targetPlayer)
+    local char = targetPlayer.Character or targetPlayer.CharacterAdded:Wait()
+    local humanoid = char:WaitForChild("Humanoid")
+    local torso = char:WaitForChild("Torso")  -- Assumes R6; for R15, swap to UpperTorso
+    local rightShoulder = torso:WaitForChild("Right Shoulder")  -- Motor6D
+
+    -- Build hand from hats (rename parts to pr1-pr10 for palm/fingers)
+    local hats = {}
+    for _, hat in pairs(char:GetChildren()) do
+        if hat:IsA("Accessory") and hat:FindFirstChild("Handle") then
+            local handle = hat.Handle
+            if handle.Name:match("pr%d+") then  -- e.g., pr1 for palm, pr2-pr10 for fingers
+                table.insert(hats, {hat = hat, part = handle})
+            end
+        end
+    end
+
+    if #hats < 5 then  -- Need at least palm + some fingers
+        return false, "Need 5+ hats renamed to pr1-pr10 (buy Pal Hair, Black Hair, etc.)"
+    end
+
+    local toggle = giantHandToggles[targetPlayer] or {toggle = false, connections = {}}
+    giantHandToggles[targetPlayer] = toggle
+
+    local function enableHand()
+        if toggle.toggle then return end
+        toggle.toggle = true
+
+        -- Reset hip height and anchor
+        humanoid.WalkSpeed = 16
+        humanoid.Sit = false
+        torso.Anchored = false
+        humanoid.HipHeight = 0
+
+        -- Reposition attachments for giant hand (scale up, curl fingers)
+        local att1 = torso:FindFirstChild("Attachment1") or Instance.new("Attachment", torso)  -- Palm base
+        att1.Name = "Attachment1"
+        att1.Position = Vector3.new(0, 0.4, -1.5)
+
+        local att2 = torso:FindFirstChild("Attachment2") or Instance.new("Attachment", torso)  -- Right arm/wrist
+        att2.Name = "Attachment2"
+        att2.Position = Vector3.new(-1.163, -0.843, -1.071)
+        att2.Rotation = Vector3.new(0, 180, 180)
+
+        -- Scale and position hand parts (giant size: 5x normal)
+        for i, hatData in pairs(hats) do
+            local part = hatData.part
+            if i == 1 then  -- Palm (pr1)
+                part.Size = Vector3.new(5, 3, 1)
+                part.CFrame = rightShoulder.C0 * CFrame.new(0, -2, 0)
+            else  -- Fingers (pr2-pr10)
+                part.Size = Vector3.new(1, 1, 2)
+                part.CFrame = rightShoulder.C0 * CFrame.new(math.sin(i * math.pi / 5), -2.5 - (i-1)*0.3, -math.cos(i * math.pi / 5))
+            end
+            part.Anchored = false  -- Let physics replicate
+            part.Parent = workspace  -- Force visibility
+        end
+
+        -- Heartbeat for animation (waving hand)
+        toggle.connections.heartbeat = RunService.Heartbeat:Connect(function()
+            if not toggle.toggle or not char.Parent then return end
+            for i = 2, #hats do
+                local part = hats[i].part
+                part.CFrame = part.CFrame * CFrame.Angles(0, math.rad(5 * math.sin(tick() * 2)), 0)  -- Gentle wave
+            end
+        end)
+    end
+
+    local function disableHand()
+        if not toggle.toggle then return end
+        toggle.toggle = false
+
+        -- Reset attachments
+        if torso:FindFirstChild("Attachment1") then
+            torso.Attachment1.Position = Vector3.new(0, 0.4, -1.5)
+        end
+        if torso:FindFirstChild("Attachment2") then
+            torso.Attachment2.Position = Vector3.new(-1.163, -0.843, -1.071)
+            torso.Attachment2.Rotation = Vector3.new(0, 0, 0)
+        end
+
+        -- Reset parts
+        for _, hatData in pairs(hats) do
+            local part = hatData.part
+            part.Size = Vector3.new(1, 1, 1)  -- Original size
+            part.CFrame = CFrame.new()  -- Reset position
+            part.Anchored = true
+            part.Parent = hatData.hat  -- Back to hat
+        end
+
+        -- Cleanup connections
+        for _, conn in pairs(toggle.connections) do
+            if conn then conn:Disconnect() end
+        end
+        toggle.connections = {}
+    end
+
+    -- Auto-disable on death
+    toggle.connections.died = humanoid.Died:Connect(disableHand)
+
+    -- Toggle function for GUI button
+    toggleHandButton.MouseButton1Click:Connect(function()
+        if toggle.toggle then
+            disableHand()
+            outputLabel.Text = "Output: Giant Hand OFF"
+        else
+            local success, err = pcall(enableHand)
+            outputLabel.Text = success and "Output: Giant Hand ON" or "Output: Error - " .. tostring(err)
+        end
+    end)
+
+    -- Enable by default if toggled on
+    if toggle.toggle then
+        enableHand()
+    end
+
+    return true
+end
+
+-- Helper to apply Giant Hand to target (single or all)
+local function setupGiantHandForTarget(targetName)
+    if targetName == "all" then
+        for _, p in pairs(Players:GetPlayers()) do
+            local success, err = pcall(setupGiantHand, p)
+            if not success then warn("Failed for " .. p.Name .. ": " .. err) end
+        end
+        return true
+    else
+        local target = Players:FindFirstChild(targetName) or (targetName == player.Name and player)
+        if target then
+            return setupGiantHand(target)
+        else
+            return false, "Player not found"
+        end
+    end
+end
+
+-- Execute function (works client or serverside)
+local function executeCode(code)
+    local output = isServerSide and print or function(text) if outputLabel then outputLabel.Text = "Output: " .. tostring(text) end end
+
+    if code == "" then
+        -- Default: Run Giant Hand for the local player or all (serverside)
+        output("Running default FE Giant Hand...")
+        local target = isServerSide and "all" or player.Name
+        local success, err = pcall(function()
+            setupGiantHandForTarget(target)
+        end)
+        output(success and "Giant Hand loaded (Click Toggle Hand)" or "Error: " .. tostring(err))
+        return
+    end
+
+    -- Handle require(assetId).load("username")
+    local requireLoadPattern = "^%s*require%((%d+)%)%.load%(%s*['\"]([^'\"]+)['\"]%s*%)%s*$"
+    local assetId, username = code:match(requireLoadPattern)
+    if assetId and username then
+        output("Running require(" .. assetId .. ").load(" .. username .. ")...")
+        local success, result = pcall(function()
+            local module = require(tonumber(assetId))
+            if module and type(module.load) == "function" then
+                return module.load(username)
+            else
+                error("Module does not have a valid load function")
+            end
+        end)
+        if not success then
+            output("Error in require().load(): " .. tostring(result))
+        elseif result then
+            output(tostring(result.message or "Loaded successfully"))
+            if result.execute and type(result.execute) == "function" then
+                local success, err = pcall(result.execute)
+                output(success and "Executed successfully" or "Error in execute: " .. tostring(err))
+            end
+        end
+        return
+    end
+
+    -- Handle require(assetId)
+    local requirePattern = "^%s*require%((%d+)%)%s*$"
+    assetId = code:match(requirePattern)
+    if assetId then
+        output("Running require(" .. assetId .. ")...")
+        local success, result = pcall(function()
+            return require(tonumber(assetId))
+        end)
+        if not success then
+            output("Error in require: " .. tostring(result))
+        elseif result then
+            if type(result) == "function" then
+                local success, err = pcall(result)
+                output(success and "Module executed successfully" or "Error in module function: " .. tostring(err))
+            else
+                output("Module loaded successfully")
+            end
+        end
+        return
+    end
+
+    -- Handle Giant Hand command
+    if code:lower():match("^gianthand%s+(.+)$") then
+        local target = code:match("^gianthand%s+(.+)$")
+        output("Running FE Giant Hand for " .. target .. "...")
+        local success, err = pcall(function()
+            setupGiantHandForTarget(target)
+        end)
+        output(success and "Giant Hand loaded (Click Toggle Hand)" or "Error: " .. tostring(err))
+        return
+    end
+
+    -- Run raw Lua script
+    output("Running Lua script...")
+    local success, result = pcall(function()
+        local func = loadstring(code)
+        if func then
+            func()
+        else
+            error("Invalid Lua script")
+        end
+    end)
+    output(success and "Script executed successfully" or "Error in script: " .. tostring(result))
+end
+
+-- Bind execute and clear buttons (client-side only)
+if not isServerSide then
+    executeButton.MouseButton1Click:Connect(function()
+        executeCode(textBox.Text)
+    end)
+
+    clearButton.MouseButton1Click:Connect(function()
+        textBox.Text = ""
+        outputLabel.Text = "Output: Cleared"
+    end)
+else
+    -- Serverside: Auto-run Giant Hand for all players
+    executeCode("giantHand all")
+end
